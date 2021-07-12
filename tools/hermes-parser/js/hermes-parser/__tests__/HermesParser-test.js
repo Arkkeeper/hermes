@@ -238,6 +238,34 @@ test('Babel root File node', () => {
   });
 });
 
+test('Babel identifierName', () => {
+  expect(parse('test', {babel: true})).toMatchObject({
+    type: 'File',
+    loc: loc(1, 0, 1, 4),
+    start: 0,
+    end: 4,
+    program: {
+      type: 'Program',
+      loc: loc(1, 0, 1, 4),
+      start: 0,
+      end: 4,
+      body: [
+        {
+          type: 'ExpressionStatement',
+          expression: {
+            type: 'Identifier',
+            loc: {
+              identifierName: 'test',
+            },
+          },
+        },
+      ],
+      directives: [],
+    },
+    comments: [],
+  });
+});
+
 test('Source locations', () => {
   // ESTree source locations include range
   expect(parse('Foo')).toMatchObject({
@@ -1668,6 +1696,44 @@ describe('This type annotations', () => {
           },
         },
       ],
+    });
+  });
+});
+
+describe('Indexed Access Type annotations in Babel', () => {
+  test('Basic Indexed Access Type', () => {
+    expect(parse(`type T = O[k]`, {babel: true})).toMatchObject({
+      type: 'File',
+      program: {
+        type: 'Program',
+        body: [
+          {
+            type: 'TypeAlias',
+            right: {
+              type: 'AnyTypeAnnotation',
+            },
+            typeParameters: null,
+          },
+        ],
+      },
+    });
+  });
+
+  test('Optional Indexed Access Type', () => {
+    expect(parse(`type T = O?.[k]`, {babel: true})).toMatchObject({
+      type: 'File',
+      program: {
+        type: 'Program',
+        body: [
+          {
+            type: 'TypeAlias',
+            right: {
+              type: 'AnyTypeAnnotation',
+            },
+            typeParameters: null,
+          },
+        ],
+      },
     });
   });
 });

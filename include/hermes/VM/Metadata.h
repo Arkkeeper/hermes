@@ -29,9 +29,8 @@ class GCSymbolID;
 /// This is used by the Garbage collector to know where potential pointers
 /// to other objects are.
 struct Metadata final {
-  using offset_t = std::uint16_t;
-  using OffsetAndNameAndSize =
-      std::pair<offset_t, std::pair<const char *, size_t>>;
+  using offset_t = std::uint8_t;
+
   /// Fields is a group of both offsets and names that describe a field within
   /// an object.
   struct Fields {
@@ -58,7 +57,7 @@ struct Metadata final {
   /// The information about an array for an object.
   struct ArrayData {
     /// Which type of element the array holds.
-    enum class ArrayType { Pointer, HermesValue, Symbol };
+    enum class ArrayType { Pointer, HermesValue, SmallHermesValue, Symbol };
     ArrayType type;
     /// The offset of where the array starts.
     offset_t startOffset;
@@ -78,6 +77,7 @@ struct Metadata final {
           startOffset(startOffset),
           lengthOffset(lengthOffset),
           stride(stride) {}
+    ArrayData(const ArrayData &data) = default;
     ArrayData &operator=(const ArrayData &data) = default;
   };
 
@@ -103,6 +103,8 @@ struct Metadata final {
     /// Adds a \c HermesValue field.
     void addField(const GCHermesValue *fieldLocation);
     void addField(const char *name, const GCHermesValue *fieldLocation);
+    void addField(const GCSmallHermesValue *fieldLocation);
+    void addField(const char *name, const GCSmallHermesValue *fieldLocation);
     /// Adds a \c Symbol field.
     void addField(const GCSymbolID *fieldLocation);
     void addField(const char *name, const GCSymbolID *fieldLocation);
@@ -132,6 +134,31 @@ struct Metadata final {
       addArray(
           name,
           ArrayData::ArrayType::HermesValue,
+          startLocation,
+          lengthLocation,
+          stride);
+    }
+
+    void addArray(
+        const GCSmallHermesValue *startLocation,
+        const AtomicIfConcurrentGC<uint32_t> *lengthLocation,
+        std::size_t stride) {
+      addArray(
+          nullptr,
+          ArrayData::ArrayType::SmallHermesValue,
+          startLocation,
+          lengthLocation,
+          stride);
+    }
+
+    void addArray(
+        const char *name,
+        const GCSmallHermesValue *startLocation,
+        const AtomicIfConcurrentGC<uint32_t> *lengthLocation,
+        std::size_t stride) {
+      addArray(
+          name,
+          ArrayData::ArrayType::SmallHermesValue,
           startLocation,
           lengthLocation,
           stride);
@@ -215,16 +242,24 @@ struct Metadata final {
       return *jsObjectOverlapSlots_;
     }
 
+    void setVTable(const VTable *vtp) {
+      vtp_ = vtp;
+    }
+
     /// Build creates a Metadata, and destroys this builder.
     Metadata build();
 
    private:
+    /// Calculate the offset of a field at \p fieldLocation relative to base_.
+    offset_t getOffset(const void *fieldLocation);
+
     /// The base of the object, used to calculate offsets.
     const char *base_;
     /// A list of offsets and within the object to its field type and name.
-    std::map<offset_t, std::pair<const char *, size_t>> pointers_;
-    std::map<offset_t, std::pair<const char *, size_t>> values_;
-    std::map<offset_t, std::pair<const char *, size_t>> symbols_;
+    std::map<offset_t, const char *> pointers_;
+    std::map<offset_t, const char *> values_;
+    std::map<offset_t, const char *> smallValues_;
+    std::map<offset_t, const char *> symbols_;
 #ifndef NDEBUG
     /// True if [offset, offset + size) overlaps any previously added field.
     bool fieldConflicts(offset_t offset, size_t size);
@@ -236,26 +271,27 @@ struct Metadata final {
     /// For subclasses of JSObject, the number of unused direct property slots.
     OptValue<unsigned> jsObjectOverlapSlots_;
 
+    /// The VTable pointer for the cell that this metadata describes.
+    const VTable *vtp_{nullptr};
+
     friend Metadata;
   };
 
-  /// Construct an empty metadata.
-  Metadata() = default;
-  Metadata(Metadata &&);
   /// Construct from a builder.
   Metadata(Builder &&mb);
-  ~Metadata() = default;
-
-  Metadata &operator=(Metadata &&) = default;
 
   /// A mapping from an offset to a name for that field
   Fields pointers_;
   Fields values_;
+  Fields smallValues_;
   Fields symbols_;
 
   /// The optional array for this object to hold.
   /// NOTE: this format currently does not support multiple arrays.
   OptValue<ArrayData> array_;
+
+  /// The VTable pointer for the cell that this metadata describes.
+  const VTable *vtp_;
 };
 
 /// @name Formatters

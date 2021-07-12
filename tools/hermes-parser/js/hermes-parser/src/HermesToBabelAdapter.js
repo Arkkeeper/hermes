@@ -37,6 +37,8 @@ class HermesToBabelAdapter extends HermesASTAdapter {
         return this.mapNodeWithDirectives(node);
       case 'Empty':
         return this.mapEmpty(node);
+      case 'Identifier':
+        return this.mapIdentifier(node);
       case 'TemplateElement':
         return this.mapTemplateElement(node);
       case 'GenericTypeAnnotation':
@@ -67,6 +69,9 @@ class HermesToBabelAdapter extends HermesASTAdapter {
       case 'FunctionDeclaration':
       case 'FunctionExpression':
         return this.mapFunction(node);
+      case 'IndexedAccessType':
+      case 'OptionalIndexedAccessType':
+        return this.mapUnsupportedTypeAnnotation(node);
       default:
         return this.mapNodeDefault(node);
     }
@@ -142,6 +147,11 @@ class HermesToBabelAdapter extends HermesASTAdapter {
     }
 
     return node;
+  }
+
+  mapIdentifier(node) {
+    node.loc.identifierName = node.name;
+    return this.mapNodeDefault(node);
   }
 
   mapTemplateElement(node) {
@@ -331,6 +341,19 @@ class HermesToBabelAdapter extends HermesASTAdapter {
     }
 
     return this.mapNodeDefault(node);
+  }
+
+  /**
+   * If Babel (the version we target) does not support a type annotation we
+   * parse, we need to return some other valid type annotation in its place.
+   */
+  mapUnsupportedTypeAnnotation(node) {
+    return {
+      type: 'AnyTypeAnnotation',
+      loc: node.loc,
+      start: node.start,
+      end: node.end,
+    };
   }
 }
 
